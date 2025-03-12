@@ -1,4 +1,6 @@
-﻿namespace URLScan.Services;
+﻿using URLScan.Models;
+
+namespace URLScan.Services;
 
 public interface IUrlValidator
 {

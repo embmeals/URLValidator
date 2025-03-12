@@ -1,5 +1,6 @@
 using URLScan.Services;
 using Microsoft.AspNetCore.Http.Json;
+using URLScan.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 

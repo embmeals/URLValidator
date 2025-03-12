@@ -1,13 +1,12 @@
 ﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>URL Validator</title>
-
     <!-- Bootstrap CDN -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
     <!-- Vue.js & Axios -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.5/axios.min.js"></script>
@@ -18,61 +17,48 @@
     <h2 class="mb-3">URL Validator</h2>
 
     <div class="mb-3">
-        <input type="file" class="form-control" @change="handleFileUpload">
+        <input type="file" class="form-control" @change="onFileChange"/>
     </div>
 
-    <button class="mb-4 btn btn-primary" @click="uploadUrls" :disabled="isProcessing">
-        {{ isProcessing ? "Processing..." : "Validate URLs" }}
+    <button class="mb-4 btn btn-primary" @click="validateUrls" :disabled="processing">
+        {{ processing ? "Processing..." : "Validate URLs" }}
     </button>
-    <div class="alert" :class="isProcessing ? 'alert-info' : 'alert-success'" v-if="isProcessing || processingComplete">
+
+    <div class="alert" :class="processing ? 'alert-info' : 'alert-success'" v-if="processing || complete">
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <strong>{{ processingStatus }}</strong>
-                <div v-if="processingComplete || results.length > 0">
-                    <span v-if="resultCountSummary.indexed > 0">{{ resultCountSummary.indexed }} indexed</span>
-                    <span v-if="resultCountSummary.noIndex > 0">, {{ resultCountSummary.noIndex }} noindex</span>
-                    <span v-if="resultCountSummary.notFound > 0">, {{ resultCountSummary.notFound }} not found</span>
-                    <span v-if="resultCountSummary.errors > 0">, {{ resultCountSummary.errors }} errors</span>
+                <strong>{{ statusMessage }}</strong>
+                <div v-if="complete || results.length">
+                    <span v-if="summary.indexed > 0">{{ summary.indexed }} indexed</span>
+                    <span v-if="summary.noIndex > 0">, {{ summary.noIndex }} noindex</span>
+                    <span v-if="summary.notFound > 0">, {{ summary.notFound }} not found</span>
+                    <span v-if="summary.errors > 0">, {{ summary.errors }} errors</span>
                 </div>
             </div>
-
-            <div v-if="isProcessing" class="progress w-50">
+            <div v-if="processing" class="progress w-50">
                 <div class="progress-bar progress-bar-striped progress-bar-animated"
-                     :style="{ width: (results.length / uploadedCount * 100) + '%' }">
-                    {{ Math.round(results.length / uploadedCount * 100) }}%
+                     :style="{ width: progressPercent + '%' }">
+                    {{ progressPercent }}%
                 </div>
             </div>
         </div>
     </div>
 
-    <p v-if="errorMessage" class="text-danger mt-3">{{ errorMessage }}</p>
+    <p v-if="error" class="text-danger mt-3">{{ error }}</p>
 
     <div class="table-responsive mt-4" v-if="paginatedResults.length">
         <table class="table table-bordered">
             <thead class="table-light">
             <tr>
-                <th class="col-1">#</th>
-                <th class="col-4">URL</th>
-                <th class="col-2">Status</th>
-                <th class="col-2">Category</th>
-                <th class="col-3">Details</th>
+                <th>#</th>
+                <th>URL</th>
+                <th>Status</th>
+                <th>Category</th>
+                <th>Details</th>
             </tr>
             </thead>
             <tbody>
-            <tr v-for="(result, index) in paginatedResults" :key="index"
-                :class="{
-        'table-danger': 
-            result.status === 'NoIndex Found' ||
-            result.status === 'Potential NoIndex',
-        'table-warning': 
-            result.status === 'Invalid URL',  
-        'table-info': 
-            result.status === '404 Not Found',     
-        'table-secondary': 
-            result.status === 'Server Error',   
-        'table-success': 
-            result.status === 'Indexed'      
-    }">
+            <tr v-for="(result, index) in paginatedResults" :key="index" :class="getRowClass(result)">
                 <td>{{ (currentPage - 1) * pageSize + index + 1 }}</td>
                 <td class="text-break text-truncate" style="max-width: 300px;">
                     <a :href="result.url" target="_blank" rel="noopener noreferrer" :title="result.url">
@@ -80,7 +66,7 @@
                     </a>
                 </td>
                 <td>{{ result.status }}</td>
-                <td>{{ result.category }}</td> 
+                <td>{{ result.category }}</td>
                 <td class="text-break">{{ result.details }}</td>
             </tr>
             </tbody>
@@ -103,18 +89,7 @@
 </div>
 
 <script>
-    const {createApp} = Vue;
-
-    const Logger = {
-        isProduction: false,
-
-        log(message, ...args) {
-            if (!this.isProduction)
-                console.log(message, ...args);
-        },
-    };
-
-    const STATUS_TYPES = {
+    const STATUS = {
         NO_INDEX: 'NoIndex Found',
         POTENTIAL_NO_INDEX: 'Potential NoIndex',
         INDEXED: 'Indexed',
@@ -124,34 +99,33 @@
     };
 
     const STATUS_ORDER = {
-        [STATUS_TYPES.NO_INDEX]: 1,
-        [STATUS_TYPES.POTENTIAL_NO_INDEX]: 2,
-        [STATUS_TYPES.INVALID_URL]: 3,
-        [STATUS_TYPES.NOT_FOUND]: 4,
-        [STATUS_TYPES.SERVER_ERROR]: 5,
-        [STATUS_TYPES.INDEXED]: 6
+        [STATUS.NO_INDEX]: 1,
+        [STATUS.POTENTIAL_NO_INDEX]: 2,
+        [STATUS.INVALID_URL]: 3,
+        [STATUS.NOT_FOUND]: 4,
+        [STATUS.SERVER_ERROR]: 5,
+        [STATUS.INDEXED]: 6
     };
 
     const BATCH_SIZE = 50;
     const BATCH_DELAY_MS = 500;
 
-    createApp({
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    Vue.createApp({
         data() {
             return {
                 file: null,
+                urls: [],
                 results: [],
-                errorMessage: "",
-                isProcessing: false,
+                error: "",
+                processing: false,
+                complete: false,
                 currentPage: 1,
                 pageSize: 50,
-                maxVisiblePages: 5,
-                uploadedUrls: [],
-                uploadedCount: 0,
-                processingComplete: false,
-                resultSummary: {
-                    total: 0,
-                    noIndex: 0,
+                summary: {
                     indexed: 0,
+                    noIndex: 0,
                     notFound: 0,
                     errors: 0
                 }
@@ -162,93 +136,56 @@
                 return Math.ceil(this.results.length / this.pageSize);
             },
             paginatedResults() {
-                if (!this.processingComplete && this.isProcessing) {
-                    return [];
-                }
-
                 const start = (this.currentPage - 1) * this.pageSize;
                 return this.results.slice(start, start + this.pageSize);
             },
-            processingStatus() {
-                if (!this.isProcessing && !this.processingComplete) {
-                    return "";
-                }
-
-                const processedCount = this.results.length;
-                const progressPercent = Math.round((processedCount / this.uploadedCount) * 100) || 0;
-
-                if (this.processingComplete) {
-                    return `${this.uploadedCount} URLs processed`;
-                } else {
-                    return `Processing: ${processedCount}/${this.uploadedCount} URLs (${progressPercent}%)`;
-                }
+            progressPercent() {
+                return this.urls.length ? Math.round((this.results.length / this.urls.length) * 100) : 0;
             },
-            resultCountSummary() {
-                return {
-                    indexed: this.resultSummary.indexed,
-                    noIndex: this.resultSummary.noIndex,
-                    notFound: this.resultSummary.notFound,
-                    errors: this.resultSummary.errors
-                };
+            statusMessage() {
+                return this.complete
+                    ? `${this.urls.length} URLs processed`
+                    : `Processing: ${this.results.length}/${this.urls.length} URLs (${this.progressPercent}%)`;
             },
             visiblePages() {
-                const startPage = Math.max(1, this.currentPage - Math.floor(this.maxVisiblePages / 2));
-                const endPage = Math.min(this.totalPages, startPage + this.maxVisiblePages - 1);
-
+                const startPage = Math.max(1, this.currentPage - Math.floor(5 / 2));
+                const endPage = Math.min(this.totalPages, startPage + 4);
                 return Array.from({length: endPage - startPage + 1}, (_, i) => startPage + i);
             }
         },
         methods: {
-            changePage(page) {
-                if (page >= 1 && page <= this.totalPages) {
-                    this.currentPage = page;
-                }
-            },
-            handleFileUpload(event) {
+            onFileChange(event) {
                 const uploadedFile = event.target.files[0];
-
                 if (!uploadedFile) {
-                    this.errorMessage = "No file selected.";
+                    this.error = "No file selected.";
                     return;
                 }
-
                 this.readFile(uploadedFile);
             },
             readFile(file) {
                 const reader = new FileReader();
-
-                reader.onload = (e) => {
-                    this.processFile(file.name, e.target.result);
+                reader.onload = e => {
+                    this.handleFileContent(file.name, e.target.result);
                 };
-
                 reader.readAsText(file);
             },
-            processFile(filename, content) {
-                const urls = this.extractUrls(filename, content);
-
-                if (!urls.length) {
-                    this.errorMessage = "File is empty or contains no valid URLs.";
+            handleFileContent(filename, content) {
+                this.urls = this.extractUrls(filename, content);
+                if (!this.urls.length) {
+                    this.error = "File is empty or contains no valid URLs.";
                     return;
                 }
-
                 this.results = [];
-                this.uploadUrls(urls);
+                this.validateUrls();
             },
             extractUrls(filename, content) {
-                const isCsv = filename.endsWith(".csv");
-
-                const urls = [...new Set(content.split(/\r?\n/)
+                const isCsv = filename.toLowerCase().endsWith(".csv");
+                return [...new Set(content.split(/\r?\n/)
                     .map(line => line.trim())
                     .filter(line => line)
-                    .map(line => isCsv
-                        ? this.extractUrlFromCsv(line)
-                        : this.extractUrlFromText(line))
+                    .map(line => isCsv ? this.extractUrlFromCsv(line) : this.extractUrlFromText(line))
                     .filter(url => url)
                 )];
-
-                Logger.log(`Extracted ${urls.length} unique URLs from file`);
-
-                return urls;
             },
             extractUrlFromCsv(line) {
                 const url = line.split(",")[0]?.trim();
@@ -260,179 +197,104 @@
             isValidUrl(url) {
                 return url && url.startsWith("http");
             },
-            uploadUrls(urls) {
-                if (!urls.length) {
-                    this.errorMessage = "No URLs provided.";
+            async validateUrls() {
+                if (!this.urls.length) {
+                    this.error = "No URLs provided.";
                     return;
                 }
-
                 this.resetState();
-                this.initializeProcessing(urls);
-
-                const batches = this.createBatches(urls, BATCH_SIZE);
-                Logger.log(`Created ${batches.length} batches from ${urls.length} URLs`);
-
-                this.processBatches(batches);
+                this.processing = true;
+                const batches = this.chunkArray(this.urls, BATCH_SIZE);
+                for (const batch of batches) {
+                    await this.processBatch(batch);
+                    await sleep(BATCH_DELAY_MS);
+                }
+                this.addMissingResults();
+                this.sortResults();
+                this.updateSummary();
+                this.processing = false;
+                this.complete = true;
             },
             resetState() {
-                this.errorMessage = "";
+                this.error = "";
                 this.results = [];
                 this.currentPage = 1;
-                this.resultSummary = {
-                    total: 0,
-                    noIndex: 0,
-                    indexed: 0,
-                    notFound: 0,
-                    errors: 0
-                };
+                this.summary = {indexed: 0, noIndex: 0, notFound: 0, errors: 0};
             },
-            initializeProcessing(urls) {
-                this.isProcessing = true;
-                this.processingComplete = false;
-                this.uploadedUrls = [...urls];
-                this.uploadedCount = urls.length;
-            },
-            createBatches(urls, batchSize) {
-                const batches = [];
-                for (let i = 0; i < urls.length; i += batchSize) {
-                    batches.push(urls.slice(i, i + batchSize));
+            chunkArray(array, size) {
+                const chunks = [];
+                for (let i = 0; i < array.length; i += size) {
+                    chunks.push(array.slice(i, i + size));
                 }
-                return batches;
+                return chunks;
             },
-            processBatches(batches) {
-                let completedBatches = 0;
-
-                batches.forEach((batch, index) => {
-                    setTimeout(() => {
-                        this.sendBatch(batch, index, batches.length, () => {
-                            completedBatches++;
-                            if (completedBatches === batches.length) {
-                                this.isProcessing = false;
-                                this.finalizeResults();
+            async processBatch(batch) {
+                try {
+                    const response = await axios.post('/api/UrlValidation/validate', batch);
+                    if (response.data && Array.isArray(response.data)) {
+                        const processed = response.data.map(result => {
+                            if (result.status === STATUS.SERVER_ERROR &&
+                                result.details && result.details.includes('timed out')) {
+                                return {
+                                    ...result,
+                                    status: STATUS.NOT_FOUND,
+                                    details: 'Page does not exist (request timed out)'
+                                };
                             }
+                            return result;
                         });
-                    }, index * BATCH_DELAY_MS);
-                });
-            },
-            sendBatch(batch, batchIndex, totalBatches, onComplete) {
-                Logger.log(`Sending batch ${batchIndex + 1}/${totalBatches} with ${batch.length} URLs`);
-
-                axios.post('/api/UrlValidation/validate', batch)
-                    .then(response => {
-                        if (response.data && Array.isArray(response.data)) {
-                            Logger.log(`Received ${response.data.length} results for batch ${batchIndex + 1}`);
-                            const processedResults = this.processResults(response.data);
-                            this.results = [...this.results, ...processedResults];
-
-                            this.updatePartialResultSummary(processedResults);
-                        }
-                    })
-                    .catch(error => {
-                        this.errorMessage = `Error: ${error.response
-                            ? error.response.data
-                            : "Server unreachable"}`;
-                    })
-                    .finally(() => {
-                        onComplete();
-                    });
-            },
-            processResults(results) {
-                return results.map(result => {
-                    if (this.isTimeoutError(result)) {
-                        return {
-                            ...result,
-                            status: STATUS_TYPES.NOT_FOUND,
-                            details: 'Page does not exist (request timed out)'
-                        };
+                        this.results.push(...processed);
                     }
-                    return result;
-                });
+                } catch (err) {
+                    this.error = `Error: ${err.response ? err.response.data : "Server unreachable"}`;
+                }
             },
-            isTimeoutError(result) {
-                return result.status === STATUS_TYPES.SERVER_ERROR &&
-                    result.details &&
-                    result.details.includes('timed out');
-            },
-
-            finalizeResults() {
-                this.addMissingUrlResults();
-                this.updateResultSummary();
-                this.sortResults();
-                this.checkCompleteness();
-                this.processingComplete = true;
-            },
-            addMissingUrlResults() {
+            addMissingResults() {
                 const processedUrls = new Set(this.results.map(r => r.url.toLowerCase()));
-                const missingUrls = this.uploadedUrls.filter(url =>
-                    !processedUrls.has(url.toLowerCase())
-                );
-
-                Logger.log(`Results check: ${this.results.length} results from ${this.uploadedCount} uploaded URLs`);
-
-                if (missingUrls.length > 0) {
-                    const missingResults = missingUrls.map(url => ({
-                        url: url,
-                        status: STATUS_TYPES.INVALID_URL,
-                        details: 'URL was not processed by the server'
-                    }));
-
-                    this.results = [...this.results, ...missingResults];
-                }
-            },
-            updatePartialResultSummary(results) {
-                this.resultSummary.total = this.results.length;
-
-                for (const result of results) {
-                    if (result.status === STATUS_TYPES.NO_INDEX ||
-                        result.status === STATUS_TYPES.POTENTIAL_NO_INDEX) {
-                        this.resultSummary.noIndex++;
-                    } else if (result.status === STATUS_TYPES.INDEXED) {
-                        this.resultSummary.indexed++;
-                    } else if (result.status === STATUS_TYPES.NOT_FOUND) {
-                        this.resultSummary.notFound++;
-                    } else {
-                        this.resultSummary.errors++;
+                this.urls.forEach(url => {
+                    if (!processedUrls.has(url.toLowerCase())) {
+                        this.results.push({
+                            url,
+                            status: STATUS.INVALID_URL,
+                            details: 'URL was not processed by the server',
+                            category: ''
+                        });
                     }
-                }
+                });
             },
-            updateResultSummary() {
-                this.resultSummary.total = this.results.length;
-
-                this.resultSummary.noIndex = this.results.filter(r =>
-                    r.status === STATUS_TYPES.NO_INDEX ||
-                    r.status === STATUS_TYPES.POTENTIAL_NO_INDEX
+            updateSummary() {
+                this.summary.indexed = this.results.filter(r => r.status === STATUS.INDEXED).length;
+                this.summary.noIndex = this.results.filter(r =>
+                    r.status === STATUS.NO_INDEX || r.status === STATUS.POTENTIAL_NO_INDEX
                 ).length;
-
-                this.resultSummary.indexed = this.results.filter(r =>
-                    r.status === STATUS_TYPES.INDEXED
-                ).length;
-
-                this.resultSummary.notFound = this.results.filter(r =>
-                    r.status === STATUS_TYPES.NOT_FOUND
-                ).length;
-
-                this.resultSummary.errors = this.results.filter(r =>
-                    r.status !== STATUS_TYPES.NO_INDEX &&
-                    r.status !== STATUS_TYPES.POTENTIAL_NO_INDEX &&
-                    r.status !== STATUS_TYPES.INDEXED &&
-                    r.status !== STATUS_TYPES.NOT_FOUND
+                this.summary.notFound = this.results.filter(r => r.status === STATUS.NOT_FOUND).length;
+                this.summary.errors = this.results.filter(r =>
+                    ![STATUS.INDEXED, STATUS.NO_INDEX, STATUS.POTENTIAL_NO_INDEX, STATUS.NOT_FOUND].includes(r.status)
                 ).length;
             },
             sortResults() {
-                this.results.sort((a, b) => {
-                    const aOrder = STATUS_ORDER[a.status] || 999;
-                    const bOrder = STATUS_ORDER[b.status] || 999;
-                    return aOrder - bOrder;
-                });
+                this.results.sort((a, b) => (STATUS_ORDER[a.status] || 999) - (STATUS_ORDER[b.status] || 999));
             },
-            checkCompleteness() {
-                if (this.results.length !== this.uploadedCount)
-                    this.errorMessage = `Warning: Only ${this.results.length} results returned from ${this.uploadedCount} URLs submitted.`;
-
+            changePage(page) {
+                if (page >= 1 && page <= this.totalPages) {
+                    this.currentPage = page;
+                }
+            },
+            getRowClass(result) {
+                if ([STATUS.NO_INDEX, STATUS.POTENTIAL_NO_INDEX].includes(result.status))
+                    return 'table-danger';
+                if (result.status === STATUS.INVALID_URL)
+                    return 'table-warning';
+                if (result.status === STATUS.NOT_FOUND)
+                    return 'table-info';
+                if (result.status === STATUS.SERVER_ERROR)
+                    return 'table-secondary';
+                if (result.status === STATUS.INDEXED)
+                    return 'table-success';
+                return '';
             }
         }
     }).mount('#app');
 </script>
-
 </body>
 </html>
