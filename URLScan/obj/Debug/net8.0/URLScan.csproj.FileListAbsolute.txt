@@ -38,3 +38,4 @@ C:\Users\Ember\RiderProjects\URLScan\URLScan\obj\Debug\net8.0\refint\URLScan.dll
 C:\Users\Ember\RiderProjects\URLScan\URLScan\obj\Debug\net8.0\URLScan.pdb
 C:\Users\Ember\RiderProjects\URLScan\URLScan\obj\Debug\net8.0\URLScan.genruntimeconfig.cache
 C:\Users\Ember\RiderProjects\URLScan\URLScan\obj\Debug\net8.0\ref\URLScan.dll
+C:\Users\Ember\RiderProjects\URLScan\URLScan\obj\Debug\net8.0\URLScan.sourcelink.json
