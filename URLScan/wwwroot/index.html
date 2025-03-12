@@ -52,18 +52,27 @@
             <thead class="table-light">
             <tr>
                 <th class="col-1">#</th>
-                <th class="col-5">URL</th>
+                <th class="col-4">URL</th>
                 <th class="col-2">Status</th>
-                <th class="col-4">Details</th>
+                <th class="col-2">Category</th>
+                <th class="col-3">Details</th>
             </tr>
             </thead>
             <tbody>
             <tr v-for="(result, index) in paginatedResults" :key="index"
-                :class="{ 
-                'table-danger': result.status === 'NoIndex Found' || result.status === 'Potential NoIndex',
-                'table-warning': result.status === 'Invalid URL' || result.status === '404 Not Found' || result.status === 'Server Error',
-                'table-success': result.status === 'Indexed'
-            }">
+                :class="{
+        'table-danger': 
+            result.status === 'NoIndex Found' ||
+            result.status === 'Potential NoIndex',
+        'table-warning': 
+            result.status === 'Invalid URL',  
+        'table-info': 
+            result.status === '404 Not Found',     
+        'table-secondary': 
+            result.status === 'Server Error',   
+        'table-success': 
+            result.status === 'Indexed'      
+    }">
                 <td>{{ (currentPage - 1) * pageSize + index + 1 }}</td>
                 <td class="text-break text-truncate" style="max-width: 300px;">
                     <a :href="result.url" target="_blank" rel="noopener noreferrer" :title="result.url">
@@ -71,6 +80,7 @@
                     </a>
                 </td>
                 <td>{{ result.status }}</td>
+                <td>{{ result.category }}</td> 
                 <td class="text-break">{{ result.details }}</td>
             </tr>
             </tbody>
@@ -93,13 +103,13 @@
 </div>
 
 <script>
-    const { createApp } = Vue;
+    const {createApp} = Vue;
 
     const Logger = {
         isProduction: false,
 
         log(message, ...args) {
-            if (!this.isProduction) 
+            if (!this.isProduction)
                 console.log(message, ...args);
         },
     };
@@ -185,7 +195,7 @@
                 const startPage = Math.max(1, this.currentPage - Math.floor(this.maxVisiblePages / 2));
                 const endPage = Math.min(this.totalPages, startPage + this.maxVisiblePages - 1);
 
-                return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+                return Array.from({length: endPage - startPage + 1}, (_, i) => startPage + i);
             }
         },
         methods: {
@@ -416,7 +426,7 @@
                 });
             },
             checkCompleteness() {
-                if (this.results.length !== this.uploadedCount) 
+                if (this.results.length !== this.uploadedCount)
                     this.errorMessage = `Warning: Only ${this.results.length} results returned from ${this.uploadedCount} URLs submitted.`;
 
             }
