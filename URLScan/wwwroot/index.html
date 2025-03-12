@@ -31,9 +31,7 @@
         <table class="table table-bordered">
             <thead class="table-light">
             <tr>
-                <th class="col-1">#</th>
-                <th class="col-4">URL</th>
-                <th class="col-2">Category</th>
+                <th class="col-6">URL</th>
                 <th class="col-2">Status</th>
                 <th class="col-4">Details</th>
             </tr>
@@ -41,11 +39,9 @@
             <tbody>
             <tr v-for="(result, index) in paginatedResults" :key="index"
                 :class="{ 'table-danger': result.status === 'NoIndex Found' || result.status === 'Potential NoIndex' }">
-                <td>{{ result.index }}</td>
                 <td class="text-break text-truncate" style="max-width: 300px;">
                     <span :title="result.url">{{ result.url }}</span>
                 </td>
-                <td>{{ result.category }}</td>
                 <td>{{ result.status }}</td>
                 <td class="text-break">{{ result.details }}</td>
             </tr>
@@ -88,23 +84,21 @@
                 return Math.ceil(this.results.length / this.pageSize);
             },
             paginatedResults() {
-                var start = (this.currentPage - 1) * this.pageSize;
+                let start = (this.currentPage - 1) * this.pageSize;
                 
                 return this.results.slice(start, start + this.pageSize);
             },
             visiblePages() {
-                var startPage = Math.max(1, this.currentPage - Math.floor(this.maxVisiblePages / 2));
-                var endPage = Math.min(this.totalPages, startPage + this.maxVisiblePages - 1);
+                let startPage = Math.max(1, this.currentPage - Math.floor(this.maxVisiblePages / 2));
+                let endPage = Math.min(this.totalPages, startPage + this.maxVisiblePages - 1);
                 
                 return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
             }
         },
         methods: {
             changePage(page) {
-                var self = this;
-                
-                if (page >= 1 && page <= self.totalPages) 
-                    self.currentPage = page;
+                if (page >= 1 && page <= this.totalPages) 
+                    this.currentPage = page;
             },
             handleFileUpload(event) {
                 var self = this;
@@ -114,6 +108,7 @@
                     self.errorMessage = "No file selected.";
                     return;
                 }
+
                 self.readFile(uploadedFile);
             },
             readFile(file) {
@@ -139,8 +134,8 @@
                 self.uploadUrls(urls);
             },
             extractUrls(filename, content) {
-                var self = this;
                 var isCsv = filename.endsWith(".csv");
+                var self = this;
 
                 return [...new Set(content.split(/\r?\n/)
                     .map(line => line.trim())
@@ -178,7 +173,6 @@
 
                 var batchSize = 50;
                 var batches = self.createBatches(urls, batchSize);
-                
                 self.processBatches(batches);
             },
             createBatches(urls, batchSize) {
@@ -203,14 +197,8 @@
             },
             sendBatch(batch, totalBatches, onComplete) {
                 var self = this;
-
                 axios.post('/api/UrlValidation/validate', batch)
                     .then(response => {
-                        let startIndex = self.results.length;
-                        response.data.forEach((result, i) => {
-                            result.index = startIndex + i + 1;
-                        });
-
                         self.results = [...self.results, ...response.data];
                     })
                     .catch(error => {
