@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("URLScan")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ffbfc03fa20f1f8d92f148e6ffdcc3e07dfd35af")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f520447790a8df7ad3a3dee2988602d11efb52ad")]
 [assembly: System.Reflection.AssemblyProductAttribute("URLScan")]
 [assembly: System.Reflection.AssemblyTitleAttribute("URLScan")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
