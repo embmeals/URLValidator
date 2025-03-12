@@ -25,8 +25,8 @@
         {{ isProcessing ? "Processing..." : "Validate URLs" }}
     </button>
 
-    <!-- New summary row -->
-    <div v-if="results.length" class="mt-3 mb-2">
+    <!-- Only show results summary when processing is complete -->
+    <div v-if="processingComplete && results.length" class="mt-3 mb-2">
         <div class="alert alert-info d-flex justify-content-between align-items-center">
             <span>
                 <strong>Results:</strong> 
@@ -47,7 +47,8 @@
         <table class="table table-bordered">
             <thead class="table-light">
             <tr>
-                <th class="col-6">URL</th>
+                <th class="col-1">#</th>
+                <th class="col-5">URL</th>
                 <th class="col-2">Status</th>
                 <th class="col-4">Details</th>
             </tr>
@@ -59,6 +60,7 @@
                     'table-warning': result.status === 'Invalid URL' || result.status === '404 Not Found' || result.status === 'Server Error',
                     'table-success': result.status === 'Indexed'
                 }">
+                <td>{{ (currentPage - 1) * pageSize + index + 1 }}</td>
                 <td class="text-break text-truncate" style="max-width: 300px;">
                     <span :title="result.url">{{ result.url }}</span>
                 </td>
@@ -85,7 +87,28 @@
 </div>
 
 <script>
-    const { createApp } = Vue;
+    const {createApp} = Vue;
+
+    const STATUS_TYPES = {
+        NO_INDEX: 'NoIndex Found',
+        POTENTIAL_NO_INDEX: 'Potential NoIndex',
+        INDEXED: 'Indexed',
+        NOT_FOUND: '404 Not Found',
+        SERVER_ERROR: 'Server Error',
+        INVALID_URL: 'Invalid URL'
+    };
+
+    const STATUS_ORDER = {
+        [STATUS_TYPES.NO_INDEX]: 1,
+        [STATUS_TYPES.POTENTIAL_NO_INDEX]: 2,
+        [STATUS_TYPES.INVALID_URL]: 3,
+        [STATUS_TYPES.NOT_FOUND]: 4,
+        [STATUS_TYPES.SERVER_ERROR]: 5,
+        [STATUS_TYPES.INDEXED]: 6
+    };
+
+    const BATCH_SIZE = 50;
+    const BATCH_DELAY_MS = 500;
 
     createApp({
         data() {
@@ -97,12 +120,14 @@
                 currentPage: 1,
                 pageSize: 50,
                 maxVisiblePages: 5,
-                uploadedUrls: [], 
-                uploadedCount: 0, 
-                resultSummary: {  
+                uploadedUrls: [],
+                uploadedCount: 0,
+                processingComplete: false,
+                resultSummary: {
                     total: 0,
                     noIndex: 0,
                     indexed: 0,
+                    notFound: 0,
                     errors: 0
                 }
             };
@@ -112,15 +137,18 @@
                 return Math.ceil(this.results.length / this.pageSize);
             },
             paginatedResults() {
-                let start = (this.currentPage - 1) * this.pageSize;
+                if (!this.processingComplete && this.isProcessing) {
+                    return [];
+                }
 
+                const start = (this.currentPage - 1) * this.pageSize;
                 return this.results.slice(start, start + this.pageSize);
             },
             visiblePages() {
-                let startPage = Math.max(1, this.currentPage - Math.floor(this.maxVisiblePages / 2));
-                let endPage = Math.min(this.totalPages, startPage + this.maxVisiblePages - 1);
+                const startPage = Math.max(1, this.currentPage - Math.floor(this.maxVisiblePages / 2));
+                const endPage = Math.min(this.totalPages, startPage + this.maxVisiblePages - 1);
 
-                return Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+                return Array.from({length: endPage - startPage + 1}, (_, i) => startPage + i);
             }
         },
         methods: {
@@ -176,15 +204,13 @@
             },
             extractUrlFromCsv(line) {
                 const url = line.split(",")[0]?.trim();
-
-                return url && url.startsWith("http")
-                    ? url
-                    : null;
+                return this.isValidUrl(url) ? url : null;
             },
             extractUrlFromText(line) {
-                return line.startsWith("http")
-                    ? line
-                    : null;
+                return this.isValidUrl(line) ? line : null;
+            },
+            isValidUrl(url) {
+                return url && url.startsWith("http");
             },
             uploadUrls(urls) {
                 if (!urls.length) {
@@ -192,26 +218,31 @@
                     return;
                 }
 
+                this.resetState();
+                this.initializeProcessing(urls);
+
+                const batches = this.createBatches(urls, BATCH_SIZE);
+                console.log(`Created ${batches.length} batches from ${urls.length} URLs`);
+
+                this.processBatches(batches);
+            },
+            resetState() {
                 this.errorMessage = "";
-                this.isProcessing = true;
                 this.results = [];
                 this.currentPage = 1;
-
-                this.uploadedUrls = [...urls];
-                this.uploadedCount = urls.length;
-
                 this.resultSummary = {
                     total: 0,
                     noIndex: 0,
                     indexed: 0,
+                    notFound: 0,
                     errors: 0
                 };
-
-                const batchSize = 50;
-                const batches = this.createBatches(urls, batchSize);
-                console.log(`Created ${batches.length} batches from ${urls.length} URLs`);
-
-                this.processBatches(batches);
+            },
+            initializeProcessing(urls) {
+                this.isProcessing = true;
+                this.processingComplete = false;
+                this.uploadedUrls = [...urls];
+                this.uploadedCount = urls.length;
             },
             createBatches(urls, batchSize) {
                 const batches = [];
@@ -232,7 +263,7 @@
                                 this.finalizeResults();
                             }
                         });
-                    }, index * 500);
+                    }, index * BATCH_DELAY_MS);
                 });
             },
             sendBatch(batch, batchIndex, totalBatches, onComplete) {
@@ -242,17 +273,44 @@
                     .then(response => {
                         if (response.data && Array.isArray(response.data)) {
                             console.log(`Received ${response.data.length} results for batch ${batchIndex + 1}`);
-                            this.results = [...this.results, ...response.data];
+                            const processedResults = this.processResults(response.data);
+                            this.results = [...this.results, ...processedResults];
                         }
                     })
                     .catch(error => {
-                        this.errorMessage = `Error: ${error.response ? error.response.data : "Server unreachable"}`;
+                        this.errorMessage = `Error: ${error.response
+                            ? error.response.data
+                            : "Server unreachable"}`;
                     })
                     .finally(() => {
                         onComplete();
                     });
             },
+            processResults(results) {
+                return results.map(result => {
+                    if (this.isTimeoutError(result)) {
+                        return {
+                            ...result,
+                            status: STATUS_TYPES.NOT_FOUND,
+                            details: 'Page does not exist (request timed out)'
+                        };
+                    }
+                    return result;
+                });
+            },
+            isTimeoutError(result) {
+                return result.status === STATUS_TYPES.SERVER_ERROR &&
+                    result.details &&
+                    result.details.includes('timed out');
+            },
             finalizeResults() {
+                this.addMissingUrlResults();
+                this.updateResultSummary();
+                this.sortResults();
+                this.checkCompleteness();
+                this.processingComplete = true;
+            },
+            addMissingUrlResults() {
                 const processedUrls = new Set(this.results.map(r => r.url.toLowerCase()));
                 const missingUrls = this.uploadedUrls.filter(url =>
                     !processedUrls.has(url.toLowerCase())
@@ -261,38 +319,49 @@
                 console.log(`Results check: ${this.results.length} results from ${this.uploadedCount} uploaded URLs`);
 
                 if (missingUrls.length > 0) {
-                    console.log(`Missing ${missingUrls.length} URLs in results`);
-
                     const missingResults = missingUrls.map(url => ({
                         url: url,
-                        status: 'Invalid URL',
+                        status: STATUS_TYPES.INVALID_URL,
                         details: 'URL was not processed by the server'
                     }));
 
                     this.results = [...this.results, ...missingResults];
                 }
-
-                this.updateResultSummary();
-
-                if (this.results.length !== this.uploadedCount) {
-                    this.errorMessage = `Warning: Only ${this.results.length} results returned from ${this.uploadedCount} URLs submitted.`;
-                }
             },
             updateResultSummary() {
                 this.resultSummary.total = this.results.length;
-                this.resultSummary.noIndex = this.results.filter(r =>
-                    r.status === 'NoIndex Found' || r.status === 'Potential NoIndex'
-                ).length;
-                this.resultSummary.indexed = this.results.filter(r =>
-                    r.status === 'Indexed'
-                ).length;
-                this.resultSummary.errors = this.resultSummary.total -
-                    this.resultSummary.indexed - this.resultSummary.noIndex;
 
-                console.log(`Result summary: Total=${this.resultSummary.total}, `+
-                    `Indexed=${this.resultSummary.indexed}, ` +
-                    `NoIndex=${this.resultSummary.noIndex}, ` +
-                    `Errors=${this.resultSummary.errors}`);
+                this.resultSummary.noIndex = this.results.filter(r =>
+                    r.status === STATUS_TYPES.NO_INDEX ||
+                    r.status === STATUS_TYPES.POTENTIAL_NO_INDEX
+                ).length;
+
+                this.resultSummary.indexed = this.results.filter(r =>
+                    r.status === STATUS_TYPES.INDEXED
+                ).length;
+
+                this.resultSummary.notFound = this.results.filter(r =>
+                    r.status === STATUS_TYPES.NOT_FOUND
+                ).length;
+
+                this.resultSummary.errors = this.results.filter(r =>
+                    r.status !== STATUS_TYPES.NO_INDEX &&
+                    r.status !== STATUS_TYPES.POTENTIAL_NO_INDEX &&
+                    r.status !== STATUS_TYPES.INDEXED &&
+                    r.status !== STATUS_TYPES.NOT_FOUND
+                ).length;
+            },
+            sortResults() {
+                this.results.sort((a, b) => {
+                    const aOrder = STATUS_ORDER[a.status] || 999;
+                    const bOrder = STATUS_ORDER[b.status] || 999;
+                    return aOrder - bOrder;
+                });
+            },
+            checkCompleteness() {
+                if (this.results.length !== this.uploadedCount) {
+                    this.errorMessage = `Warning: Only ${this.results.length} results returned from ${this.uploadedCount} URLs submitted.`;
+                }
             }
         }
     }).mount('#app');
