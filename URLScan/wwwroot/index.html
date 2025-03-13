@@ -53,6 +53,7 @@
                 <th>Status</th>
                 <th>Category</th>
                 <th>Details</th>
+                <th>Meta Tags</th>
             </tr>
             </thead>
             <tbody>
@@ -66,6 +67,11 @@
                 <td>{{ result.status }}</td>
                 <td>{{ result.category }}</td>
                 <td class="text-break">{{ result.details }}</td>
+                <td class="text-break">
+                    <div v-for="(content, key) in result.metaTags" :key="key">
+                        <strong>{{ key }}</strong>: {{ content }}
+                    </div>
+                </td>
             </tr>
             </tbody>
         </table>
