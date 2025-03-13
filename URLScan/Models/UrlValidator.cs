@@ -77,6 +77,7 @@ public class UrlValidator : IUrlValidator
             return CacheResult(url, UrlStatus.Invalid, "Malformed URL", "Uncategorized");
 
         var category = DetermineCategory(url);
+
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Add("Accept-Language", "en-US,en;q=0.9");
         request.Headers.Add("User-Agent",
@@ -88,7 +89,6 @@ public class UrlValidator : IUrlValidator
         if (!sendResult.IsSuccess)
         {
             var errorMsg = sendResult.Error ?? "Unknown error";
-
             if (errorMsg.Contains("canceled", StringComparison.OrdinalIgnoreCase))
                 return CacheResult(url, UrlStatus.ServerError, "Request timed out", category);
 
@@ -97,6 +97,7 @@ public class UrlValidator : IUrlValidator
 
         var response = sendResult.Value;
         var statusCode = (int)response.StatusCode;
+
         if (statusCode == 404)
             return CacheResult(url, UrlStatus.NotFound, "Page does not exist", category);
         if (statusCode >= 500)
@@ -114,12 +115,13 @@ public class UrlValidator : IUrlValidator
         var html = contentResult;
         if (string.IsNullOrWhiteSpace(html))
             return CacheResult(url, UrlStatus.EmptyPage, "No content found", category);
-        
-        var allMetaTags = ExtractAllMetaTags(html);
-        if (HasNoIndexMetaTag(html))
-            return CacheResult(url, UrlStatus.NoIndex, "Page contains 'noindex' meta tag", category);
 
-        return CacheResult(url, UrlStatus.Indexed, "Page is NOT noindexed", category);
+        var allMetaTags = ExtractAllMetaTags(html);
+
+        if (HasNoIndexMetaTag(html))
+            return CacheResult(url, UrlStatus.NoIndex, "Page contains 'noindex' meta tag", category, allMetaTags);
+
+        return CacheResult(url, UrlStatus.Indexed, "Page is NOT noindexed", category, allMetaTags);
     }
 
     private static List<string> GetDistinctUrls(List<string> urls) =>
@@ -161,44 +163,50 @@ public class UrlValidator : IUrlValidator
         }
     }
 
-private string ExtractAllMetaTags(string html)
-{
-    var htmlDocument = new HtmlDocument();
-    htmlDocument.LoadHtml(html);
-
-    var metaNodes = htmlDocument.DocumentNode.SelectNodes("//meta");
-    if (metaNodes == null)
-        return string.Empty;
-
-    var metaTags = new List<string>();
-    foreach (var metaNode in metaNodes)
+    private Dictionary<string, string> ExtractAllMetaTags(string html)
     {
-        var metaTag = ProcessMetaTag(metaNode);
-        if (!string.IsNullOrEmpty(metaTag))
-            metaTags.Add(metaTag);
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
+
+        var metaNodes = doc.DocumentNode.SelectNodes("//meta");
+        if (metaNodes == null)
+            return new Dictionary<string, string>();
+
+        var allowedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "robots",
+            "og:url",
+            "googlebot",
+        };
+
+        var metaTags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var metaNode in metaNodes)
+        {
+            var name = metaNode.GetAttributeValue("name", "");
+            var property = metaNode.GetAttributeValue("property", "");
+            var content = metaNode.GetAttributeValue("content", "");
+
+            var key = !string.IsNullOrEmpty(name)
+                ? name
+                : !string.IsNullOrEmpty(property)
+                    ? property
+                    : null;
+
+            if (key != null && allowedKeys.Contains(key)) 
+                metaTags[key] = content;
+        }
+        return metaTags;
     }
 
-    return string.Join(" | ", metaTags);
-}
 
-private string ProcessMetaTag(HtmlNode metaNode)
-{
-    var name = metaNode.GetAttributeValue("name", string.Empty);
-    var property = metaNode.GetAttributeValue("property", string.Empty);
-    var content = metaNode.GetAttributeValue("content", string.Empty);
-
-    if (!string.IsNullOrEmpty(name) || !string.IsNullOrEmpty(property) || !string.IsNullOrEmpty(content))
-        return $"{name}={content}";
-
-    return string.Empty;
-}
-    
     private UrlValidationResult CacheResult(
         string url,
         string status,
         string details,
         string category,
-        string metaTags = "")
+        Dictionary<string, string>? metaTags = null
+    )
     {
         var result = new UrlValidationResult(url, status, details, category, metaTags);
         _cache.Set(url, result, TimeSpan.FromMinutes(30));

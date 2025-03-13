@@ -3,17 +3,14 @@
 public class UrlValidationResult(
     string url,
     string status,
-    string? messageDetails = "",
-    string tagCategory = "Uncategorized",
-    string metaTags = ""
-)
+    string? details = "",
+    string category = "Uncategorized",
+    Dictionary<string, string>? metaTags = null)
 {
-    public string Url { get; } = EnsureNotNullOrEmpty(url, nameof(url));
-    public string Status { get; } = EnsureNotNullOrEmpty(status, nameof(status));
-    public string Details { get; } = messageDetails ?? string.Empty;
-    public string Category { get; } = tagCategory;
-    public string MetaTags { get; } = metaTags;
+    public string Url { get; } = url      ?? throw new ArgumentNullException(nameof(url));
+    public string Status { get; } = status   ?? throw new ArgumentNullException(nameof(status));
+    public string Details { get; } = details  ?? string.Empty;
+    public string Category { get; } = category;
 
-    private static string EnsureNotNullOrEmpty(string value, string paramName) =>
-        string.IsNullOrWhiteSpace(value) ? throw new ArgumentNullException(paramName) : value;
+    public Dictionary<string, string> MetaTags { get; } = metaTags ?? new Dictionary<string, string>();
 }
