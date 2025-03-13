@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "Mh5nMJq9affRBZHrUP/sH/sst26wsD0J+ZRJwZZP5M4=",
+  "Hash": "K1blelSs7nSfriQy5kJm7ic1/VF2BWvm9eCb60NazAk=",
   "Source": "URLScan",
   "BasePath": "_content/URLScan",
   "Mode": "Default",
@@ -16,6 +16,25 @@
     }
   ],
   "Assets": [
+    {
+      "Identity": "C:\\Users\\Ember\\RiderProjects\\URLScan\\URLScan\\wwwroot\\favicon.ico",
+      "SourceId": "URLScan",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\Ember\\RiderProjects\\URLScan\\URLScan\\wwwroot\\",
+      "BasePath": "_content/URLScan",
+      "RelativePath": "favicon.ico",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\favicon.ico"
+    },
     {
       "Identity": "C:\\Users\\Ember\\RiderProjects\\URLScan\\URLScan\\wwwroot\\index.html",
       "SourceId": "URLScan",
@@ -34,6 +53,25 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\index.html"
+    },
+    {
+      "Identity": "C:\\Users\\Ember\\RiderProjects\\URLScan\\URLScan\\wwwroot\\js\\url_scanner.js",
+      "SourceId": "URLScan",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\Ember\\RiderProjects\\URLScan\\URLScan\\wwwroot\\",
+      "BasePath": "_content/URLScan",
+      "RelativePath": "js/url_scanner.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\js\\url_scanner.js"
     }
   ]
 }
