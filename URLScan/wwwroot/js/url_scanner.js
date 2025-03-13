@@ -117,7 +117,6 @@ Vue.createApp({
             this.resetState();
             this.processing = true;
 
-            // Process in batches to avoid overwhelming the server
             const batches = this.chunkArray(this.urls, BATCH_SIZE);
             for (const batch of batches) {
                 await this.processBatch(batch);
@@ -148,7 +147,6 @@ Vue.createApp({
             try {
                 const response = await axios.post('/api/UrlValidation/validate', batch);
                 if (response.data && Array.isArray(response.data)) {
-                    // Convert any server-timeout errors to "404 Not Found"
                     const processed = response.data.map(result => {
                         if (
                             result.status === STATUS.SERVER_ERROR &&
@@ -195,9 +193,8 @@ Vue.createApp({
             this.results.sort((a, b) => (STATUS_ORDER[a.status] || 999) - (STATUS_ORDER[b.status] || 999));
         },
         changePage(page) {
-            if (page >= 1 && page <= this.totalPages) {
+            if (page >= 1 && page <= this.totalPages) 
                 this.currentPage = page;
-            }
         },
         getRowClass(result) {
             if ([STATUS.NO_INDEX, STATUS.POTENTIAL_NO_INDEX].includes(result.status)) {
