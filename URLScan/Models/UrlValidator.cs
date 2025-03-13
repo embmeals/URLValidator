@@ -8,27 +8,27 @@ namespace URLScan.Models;
 
 public static class UrlStatus
 {
-    public const string Indexed     = "Indexed";
-    public const string Invalid     = "Invalid URL";
-    public const string NotFound    = "404 Not Found";
+    public const string Indexed = "Indexed";
+    public const string Invalid = "Invalid URL";
+    public const string NotFound = "404 Not Found";
     public const string ServerError = "Server Error";
-    public const string NoIndex     = "NoIndex Found";
-    public const string EmptyPage   = "Empty Page";
+    public const string NoIndex = "NoIndex Found";
+    public const string EmptyPage = "Empty Page";
 }
 
 public class UrlValidator : IUrlValidator
 {
-    private readonly HttpClient  _httpClient;
+    private readonly HttpClient _httpClient;
     private readonly ILogger<UrlValidator> _logger;
     private readonly MemoryCache _cache;
 
     public UrlValidator(HttpClient httpClient, ILogger<UrlValidator> logger)
     {
         _httpClient = httpClient;
-        _httpClient.Timeout = TimeSpan.FromSeconds(10);
+        _httpClient.Timeout = TimeSpan.FromSeconds(50);
 
         _logger = logger;
-        _cache  = new MemoryCache(new MemoryCacheOptions());
+        _cache = new MemoryCache(new MemoryCacheOptions());
     }
 
     public async Task<List<UrlValidationResult?>> ValidateUrlsAsync(List<string> urls)
@@ -88,6 +88,7 @@ public class UrlValidator : IUrlValidator
         if (!sendResult.IsSuccess)
         {
             var errorMsg = sendResult.Error ?? "Unknown error";
+
             if (errorMsg.Contains("canceled", StringComparison.OrdinalIgnoreCase))
                 return CacheResult(url, UrlStatus.ServerError, "Request timed out", category);
 
@@ -113,16 +114,15 @@ public class UrlValidator : IUrlValidator
         var html = contentResult;
         if (string.IsNullOrWhiteSpace(html))
             return CacheResult(url, UrlStatus.EmptyPage, "No content found", category);
-
+        
+        var allMetaTags = ExtractAllMetaTags(html);
         if (HasNoIndexMetaTag(html))
             return CacheResult(url, UrlStatus.NoIndex, "Page contains 'noindex' meta tag", category);
 
         return CacheResult(url, UrlStatus.Indexed, "Page is NOT noindexed", category);
     }
 
-    #region Helper Methods
-
-    private List<string> GetDistinctUrls(List<string> urls) =>
+    private static List<string> GetDistinctUrls(List<string> urls) =>
         urls
             .Where(u => !string.IsNullOrWhiteSpace(u))
             .Select(u => u.Trim())
@@ -161,14 +161,51 @@ public class UrlValidator : IUrlValidator
         }
     }
 
-    private UrlValidationResult CacheResult(string url, string status, string details, string category)
+private string ExtractAllMetaTags(string html)
+{
+    var htmlDocument = new HtmlDocument();
+    htmlDocument.LoadHtml(html);
+
+    var metaNodes = htmlDocument.DocumentNode.SelectNodes("//meta");
+    if (metaNodes == null)
+        return string.Empty;
+
+    var metaTags = new List<string>();
+    foreach (var metaNode in metaNodes)
     {
-        var result = new UrlValidationResult(url, status, details, category);
+        var metaTag = ProcessMetaTag(metaNode);
+        if (!string.IsNullOrEmpty(metaTag))
+            metaTags.Add(metaTag);
+    }
+
+    return string.Join(" | ", metaTags);
+}
+
+private string ProcessMetaTag(HtmlNode metaNode)
+{
+    var name = metaNode.GetAttributeValue("name", string.Empty);
+    var property = metaNode.GetAttributeValue("property", string.Empty);
+    var content = metaNode.GetAttributeValue("content", string.Empty);
+
+    if (!string.IsNullOrEmpty(name) || !string.IsNullOrEmpty(property) || !string.IsNullOrEmpty(content))
+        return $"{name}={content}";
+
+    return string.Empty;
+}
+    
+    private UrlValidationResult CacheResult(
+        string url,
+        string status,
+        string details,
+        string category,
+        string metaTags = "")
+    {
+        var result = new UrlValidationResult(url, status, details, category, metaTags);
         _cache.Set(url, result, TimeSpan.FromMinutes(30));
         return result;
     }
 
-    private bool HasNoIndexHeader(HttpResponseMessage response)
+    private static bool HasNoIndexHeader(HttpResponseMessage response)
     {
         if (!response.Headers.Contains("X-Robots-Tag"))
             return false;
@@ -178,12 +215,11 @@ public class UrlValidator : IUrlValidator
             .Any(value => value.Contains("noindex", StringComparison.OrdinalIgnoreCase));
     }
 
-    private bool HasNoIndexMetaTag(string html)
+    private static bool HasNoIndexMetaTag(string html)
     {
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
 
-        // <meta name="robots" content="noindex"> or <meta name="googlebot" content="noindex">
         var robotsMeta = doc.DocumentNode.SelectNodes("//meta[@name='robots']");
         if (robotsMeta != null && robotsMeta.Any(meta =>
                 meta.GetAttributeValue("content", "")
@@ -205,39 +241,21 @@ public class UrlValidator : IUrlValidator
 
     private string DetermineCategory(string url)
     {
-        if (url.Contains("/jobs/")      || url.Contains("/careers/")  || url.Contains("/job-"))
+        if (url.Contains("/jobs/") || url.Contains("/careers/") || url.Contains("/job-"))
             return "Job Listings";
-        if (url.Contains("/articles/")  || url.Contains("/blog/")     || url.Contains("/post/"))
+        if (url.Contains("/articles/") || url.Contains("/blog/") || url.Contains("/post/"))
             return "Articles";
-        if (url.Contains("/news/")      || url.Contains("/press/"))
+        if (url.Contains("/news/") || url.Contains("/press/"))
             return "News";
-        if (url.Contains("/events/")    || url.Contains("/webinars/"))
+        if (url.Contains("/events/") || url.Contains("/webinars/"))
             return "Events";
-        if (url.Contains("/about/")     || url.Contains("/company/"))
+        if (url.Contains("/about/") || url.Contains("/company/"))
             return "Company";
-        if (url.Contains("/products/")  || url.Contains("/services/"))
+        if (url.Contains("/products/") || url.Contains("/services/"))
             return "Products";
-        if (url.Contains("/support/")   || url.Contains("/help/"))
+        if (url.Contains("/support/") || url.Contains("/help/"))
             return "Support";
 
         return "Uncategorized";
     }
-
-    #endregion
-}
-
-public class UrlValidationResult
-{
-    public UrlValidationResult(string url, string status, string? details = "", string category = "Uncategorized")
-    {
-        Url      = url ?? throw new ArgumentNullException(nameof(url));
-        Status   = status ?? throw new ArgumentNullException(nameof(status));
-        Details  = details ?? string.Empty;
-        Category = category;
-    }
-
-    public string Url      { get; }
-    public string Status   { get; }
-    public string Details  { get; }
-    public string Category { get; }
 }
