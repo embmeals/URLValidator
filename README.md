@@ -60,3 +60,7 @@ Navigate to `http://localhost:5114` and you'll see the "URL Validator" interface
 
 
 ![image](https://github.com/user-attachments/assets/0c0e7969-cf5c-411d-a67b-c5a245778cab)
+![image](https://github.com/user-attachments/assets/723c65db-2332-4902-9a32-c9612ff5023f)
+![image](https://github.com/user-attachments/assets/3d3e1fa5-bcc8-4a7a-9f18-addb46b2015c)
+
+
